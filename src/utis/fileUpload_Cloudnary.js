@@ -23,11 +23,8 @@ const uploadOnCloudnary= async (localfile)=>{
     } catch (error) {
         fs.unlinkSync(localfile)  // remove locally saved files 
         return null
-        
     }
-
 }
-
 
 export {cloudinary};
 
