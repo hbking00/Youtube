@@ -3,6 +3,20 @@ import {Apierror} from  "../utis/Apierror.js"
 import {User} from  "../Models/user.model.js"
 import {uploadOnCloudnary} from "../utis/fileUpload_Cloudnary.js"
 import { ApiResponse } from "../utis/ApiResponse.js"
+ 
+const generateAccessAndRefershToken=async(userId)=>{
+    try {
+        const user=await User.findById(userId);
+        const accessToken =user.generateAccessToken();
+        const refershToken = user.generateRefreshToken() ;
+        user.refershToken=refershToken
+        await user.save({validateBeforeSave: false})
+        return {accessToken,refershToken}
+        
+    } catch (error) {
+        throw new Apierror('400',"Something went wrong while generating token");
+    }
+} 
 const registerUser= asyncHandler(async (req , res)=>{
     //get user details from frontend
     //validation - not empty and many more
@@ -89,5 +103,79 @@ const registerUser= asyncHandler(async (req , res)=>{
 })
 
 
+const loginUser= asyncHandler(async (req, res)=>{
+     
+    //req boy -> data
 
-export {registerUser} 
+    // username or email
+    // find 
+    //password check 
+    //access and generate refresh token 
+    // send secure cookies 
+   
+    const {email,userName,password} =req.body;
+       
+    if(!(email || userName)){
+        throw new Apierror('400' , "UserName or email is required")
+    }
+    const user = await User.findOne({
+        $or :[{userName,email}]
+    })
+    if (!user) {
+        throw new Apierror('404',"User does not exist");
+    }
+   const isPasswordvalid= await user.isPasswordCorrect(password)
+   if(!isPasswordvalid){
+    throw new Apierror('401', "Invalid user credentail")
+
+   }
+   const {accessToken ,refershToken}=await generateAccessAndRefershToken(user._id)
+
+  const loginuser= await User.findById(user._id).select("-password -refershtoken");
+  const options={
+    httpOnly:true,
+    secure:true
+  }
+    console.log(accessToken);
+    console.log(refershToken);
+    return  res
+  .status(200)
+  .cookie("accessToken",accessToken,options)
+  .cookie("refreshToken",refershToken,options)
+  .json(
+    new ApiResponse(200,{
+        user:loginuser,
+        accessToken,
+        refershToken
+        },
+        "User Logined successfully"
+    )
+  )
+
+
+})
+
+
+
+const logoutUser=asyncHandler(async (req,res)=>{
+    //
+    await User.findByIdAndUpdate(req.user._id,{
+       $unset:{
+        refershToken:1
+       }
+    },
+    {new:true})
+    const options={
+    httpOnly:true,
+    secure:true
+  }
+  return res.status(200)
+  .clearCookie("accessToken",options)
+  .clearCookie("refreshToken",options)
+  .json(
+    new ApiResponse(200,{},"User logged out successfully")
+  )
+})
+
+
+export {registerUser , loginUser, logoutUser} 
