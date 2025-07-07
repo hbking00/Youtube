@@ -3,7 +3,7 @@ import {Apierror} from  "../utis/Apierror.js"
 import {User} from  "../Models/user.model.js"
 import {uploadOnCloudnary} from "../utis/fileUpload_Cloudnary.js"
 import { ApiResponse } from "../utis/ApiResponse.js"
- 
+import jwt from "jsonwebtoken"
 const generateAccessAndRefershToken=async(userId)=>{
     try {
         const user=await User.findById(userId);
@@ -177,5 +177,42 @@ const logoutUser=asyncHandler(async (req,res)=>{
   )
 })
 
+const refreshAccessToken=asyncHandler(async (req,res)=>{
+    const incommingRefreshToken=  req.cookies.refershToken || req.body.refershToken
+    if(!incommingRefreshToken){
+        throw new Apierror(400,"Unauthorized request")
 
-export {registerUser , loginUser, logoutUser} 
+    }
+   try {
+     const decodedToken=jwt.verify(incommingRefreshToken,process.env.REFRESH_TOKEN_SECRET)
+ 
+     const user=await User.findById(decodedToken._id)
+     if(!user){
+         throw new Apierror(404,"User does not exist")
+     }
+     if(user?.refershToken !== incommingRefreshToken){
+         throw new Apierror(401,"Refresh token is exprired ")
+     }
+     const options={
+         httpOnly:true,
+         secure:true
+       }
+     const {accessToken , newrefershToken}=  await generateAccessAndRefershToken(user._id)
+       return res.status(200)
+     .cookie("accessToken",accessToken,options)
+     .cookie("refreshToken",newrefershToken,options)
+     .json(  
+         new ApiResponse(200,{
+             accessToken,
+             newrefershToken
+         },"Access token refreshed successfully")
+     )
+    } catch (error) {
+       throw new Apierror(400,error?.message||"Invalid refresh token");
+    
+   }
+
+    
+
+})
+export {registerUser , loginUser, logoutUser,refreshAccessToken} 
